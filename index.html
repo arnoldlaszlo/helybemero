@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- iOS PWA specifikus tagek -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Helyzetmérő">
+    
+    <!-- Generált App Ikon és Manifest a Főképernyőhöz -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgZmlsbD0iIzAyMDYxNyIvPjxjaXJjbGUgY3g9IjkwIiBjeT0iOTAiIHI9IjUwIiBmaWxsPSJub25lIiBzdHJva2U9IiMzYjgyZjYiIHN0cm9rZS13aWR0aD0iMTAiLz48Y2lyY2xlIGN4PSI5MCIgY3k9IjkwIiByPSIyMCIgZmlsbD0iIzNiODJmNiIvPjwvc3ZnPg==">
+    <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22Helyzetm%C3%A9r%C5%91%20Pro%22%2C%22short_name%22%3A%22Helyzetm%C3%A9r%C5%91%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23020617%22%2C%22theme_color%22%3A%22%23020617%22%7D">
+    
+    <title>Helyzetmérő Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #f8fafc;
+            overflow: hidden;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .measure-btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid white;
+        }
+
+        .measure-btn:active {
+            transform: scale(0.98);
+            background-color: #1e293b;
+        }
+
+        .measure-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .pulse {
+            animation: pulse-animation 2s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.2); }
+            100% { box-shadow: 0 0 0 20px rgba(255, 255, 255, 0); }
+        }
+
+        .step-btn {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.2s;
+        }
+
+        .step-btn:active:not(:disabled) {
+            transform: scale(0.9);
+            background: #334155;
+        }
+
+        /* Egyedi görgetősáv a táblázathoz */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center p-6 pt-12" style="padding-top: max(1.5rem, env(safe-area-inset-top));">
+
+    <!-- Offline indikátor -->
+    <div id="offline-badge" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-orange-500/20 text-orange-400 border border-orange-500/50 px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase flex items-center gap-2 z-50">
+        <div class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+        Offline Mód
+    </div>
+
+    <!-- Felső rész: Dátum és Óra -->
+    <div class="text-center mt-4 mb-8">
+        <div id="date-display" class="text-blue-400 text-lg font-light tracking-widest mb-1">
+            <!-- ÉÉÉÉ.HH.NN. NNNN -->
+        </div>
+        <div id="time-display" class="mono text-5xl font-bold tracking-tighter text-white">
+            <!-- ÓÓ.PP.MM -->
+        </div>
+    </div>
+
+    <!-- Középső rész: Gomb és Beállítások -->
+    <div class="flex flex-col items-center w-full max-w-md shrink-0">
+        
+        <!-- Mérés gomb -->
+        <button id="measure-btn" class="measure-btn w-full py-10 bg-black text-white rounded-2xl text-2xl font-black tracking-[0.2em] mb-4">
+            MÉRÉS (5)
+        </button>
+
+        <!-- Mérések száma beállító -->
+        <div class="flex items-center gap-6 mb-6">
+            <button id="dec-btn" class="step-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+            <div class="text-center">
+                <div class="text-[10px] text-slate-400 uppercase tracking-widest">Mérések száma</div>
+                <div id="count-display" class="mono text-xl font-bold text-white">5</div>
+            </div>
+            <button id="inc-btn" class="step-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+        </div>
+        
+        <!-- Folyamatjelző -->
+        <div id="status-container" class="hidden w-full mb-6">
+            <div class="flex justify-between text-[10px] text-blue-300 mb-1 px-1">
+                <span>MÉRÉS FOLYAMATBAN...</span>
+                <span id="progress-text">0 / 5</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
+                <div id="progress-bar" class="bg-white h-full w-0 transition-all duration-300"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alsó rész: Eredmények és Táblázat -->
+    <div id="results-container" class="w-full max-w-3xl flex-1 flex flex-col gap-4 overflow-hidden opacity-0 translate-y-4 transition-all duration-700">
+        
+        <!-- Átlagolt panel -->
+        <div class="glass-panel rounded-2xl p-4 shrink-0">
+            <h2 class="text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-white/10 pb-1">Átlagolt eredmények</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-[10px] text-slate-500 uppercase">Szélesség</div>
+                    <div id="res-lat" class="mono text-sm font-semibold text-white">-</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-500 uppercase">Hosszúság</div>
+                    <div id="res-lng" class="mono text-sm font-semibold text-white">-</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-500 uppercase">Magasság</div>
+                    <div id="res-alt" class="mono text-sm font-semibold text-emerald-400">-</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-500 uppercase">Pontosság</div>
+                    <div id="res-acc" class="mono text-sm font-semibold text-orange-400">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Részletes táblázat -->
+        <div class="glass-panel rounded-2xl overflow-hidden flex-1 flex flex-col">
+            <div class="p-3 border-b border-white/10 bg-white/5">
+                <h2 class="text-slate-300 text-[10px] font-bold uppercase tracking-widest text-center">Mérési napló</h2>
+            </div>
+            <div class="overflow-y-auto flex-1 custom-scrollbar">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-slate-900 shadow-sm z-10 text-center">
+                        <tr class="text-[10px] uppercase text-slate-500 tracking-wider">
+                            <th class="p-3 font-medium">Idő</th>
+                            <th class="p-3 font-medium text-left">#</th>
+                            <th class="p-3 font-medium text-left">Koordináták</th>
+                            <th class="p-3 font-medium text-left">Magasság</th>
+                            <th class="p-3 font-medium text-left">Pontosság</th>
+                        </tr>
+                    </thead>
+                    <tbody id="measurement-table-body" class="mono text-[11px] divide-y divide-white/5">
+                        <!-- Itt jelennek meg a mérések -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="error-message" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-900/80 text-red-200 px-6 py-3 rounded-full text-sm border border-red-500 hidden z-50">
+        Hiba történt a GPS mérés során.
+    </div>
+
+    <script>
+        // PWA és Service Worker Regisztráció
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'gps-app-v1';
+                    self.addEventListener('install', (e) => self.skipWaiting());
+                    self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
+                    self.addEventListener('fetch', (e) => {
+                        e.respondWith(
+                            caches.match(e.request).then((response) => {
+                                return response || fetch(e.request).then(fetchRes => {
+                                    return caches.open(CACHE_NAME).then(cache => {
+                                        if (e.request.url.startsWith('http')) {
+                                            cache.put(e.request, fetchRes.clone());
+                                        }
+                                        return fetchRes;
+                                    });
+                                });
+                            }).catch(() => new Response('Offline mód aktív', {status: 200}))
+                        );
+                    });
+                `;
+                const blob = new Blob([swCode], {type: 'application/javascript'});
+                const swUrl = URL.createObjectURL(blob);
+                
+                navigator.serviceWorker.register(swUrl).catch(() => {
+                    // Fallback, ha a generált Blob biztonsági okokból blokkolásra kerül (pl. szigorú szerveren)
+                    navigator.serviceWorker.register('./sw.js').catch(() => {});
+                });
+            });
+        }
+
+        // Hálózati státusz figyelése
+        const offlineBadge = document.getElementById('offline-badge');
+        function updateOnlineStatus() {
+            if (navigator.onLine) {
+                offlineBadge.classList.add('hidden');
+            } else {
+                offlineBadge.classList.remove('hidden');
+            }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus(); // Kezdeti állapot beállítása
+
+        // Idő és Dátum frissítése
+        function updateClock() {
+            const now = new Date();
+            const days = ['VASÁRNAP', 'HÉTFŐ', 'KEDD', 'SZERDA', 'CSÜTÖRTÖK', 'PÉNTEK', 'SZOMBAT'];
+            
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const dayName = days[now.getDay()];
+
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            document.getElementById('date-display').textContent = `${year}.${month}.${day}. ${dayName}`;
+            document.getElementById('time-display').textContent = `${hours}.${minutes}.${seconds}`;
+        }
+
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Állapot és Vezérlők
+        let targetCount = 5;
+        const measureBtn = document.getElementById('measure-btn');
+        const countDisplay = document.getElementById('count-display');
+        const decBtn = document.getElementById('dec-btn');
+        const incBtn = document.getElementById('inc-btn');
+        
+        const resultsContainer = document.getElementById('results-container');
+        const statusContainer = document.getElementById('status-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const errorMsg = document.getElementById('error-message');
+        const tableBody = document.getElementById('measurement-table-body');
+
+        function updateTargetUI() {
+            countDisplay.textContent = targetCount;
+            measureBtn.textContent = `MÉRÉS (${targetCount})`;
+        }
+
+        decBtn.addEventListener('click', () => {
+            if (targetCount > 1) {
+                targetCount--;
+                updateTargetUI();
+            }
+        });
+
+        incBtn.addEventListener('click', () => {
+            if (targetCount < 100) {
+                targetCount++;
+                updateTargetUI();
+            }
+        });
+
+        // GPS Mérés logika
+        let measurements = [];
+
+        async function startMeasurement() {
+            measurements = [];
+            tableBody.innerHTML = '';
+            toggleControls(false);
+            measureBtn.textContent = "MÉRÉS...";
+            measureBtn.classList.add('pulse');
+            
+            statusContainer.classList.remove('hidden');
+            resultsContainer.classList.add('opacity-0', 'translate-y-4');
+            errorMsg.classList.add('hidden');
+
+            for (let i = 0; i < targetCount; i++) {
+                try {
+                    const pos = await getSinglePosition();
+                    const now = new Date();
+                    const timestamp = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                    
+                    const data = {
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        alt: pos.coords.altitude || 0,
+                        acc: pos.coords.accuracy,
+                        time: timestamp
+                    };
+                    
+                    measurements.push(data);
+                    addTableRow(i + 1, data);
+                    
+                    const percent = ((i + 1) / targetCount) * 100;
+                    progressBar.style.width = `${percent}%`;
+                    progressText.textContent = `${i + 1} / ${targetCount}`;
+                    
+                } catch (err) {
+                    showError("Helymeghatározás sikertelen. Ellenőrizd a GPS beállításokat!");
+                    resetUI();
+                    return;
+                }
+            }
+
+            displayAverages();
+            resetUI(true);
+        }
+
+        function getSinglePosition() {
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+        }
+
+        function addTableRow(index, data) {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="p-3 text-blue-400 font-bold text-center">${data.time}</td>
+                <td class="p-3 text-slate-500">${index}</td>
+                <td class="p-3 text-white">${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}</td>
+                <td class="p-3 text-emerald-400">${data.alt ? data.alt.toFixed(1) + 'm' : 'N/A'}</td>
+                <td class="p-3 text-orange-400">±${data.acc.toFixed(1)}m</td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        function displayAverages() {
+            const count = measurements.length;
+            const avgLat = measurements.reduce((s, m) => s + m.lat, 0) / count;
+            const avgLng = measurements.reduce((s, m) => s + m.lng, 0) / count;
+            const avgAlt = measurements.reduce((s, m) => s + m.alt, 0) / count;
+            const avgAcc = measurements.reduce((s, m) => s + m.acc, 0) / count;
+
+            document.getElementById('res-lat').textContent = avgLat.toFixed(6) + '°';
+            document.getElementById('res-lng').textContent = avgLng.toFixed(6) + '°';
+            document.getElementById('res-alt').textContent = avgAlt ? avgAlt.toFixed(1) + ' m' : 'N/A';
+            document.getElementById('res-acc').textContent = '±' + avgAcc.toFixed(1) + ' m';
+
+            resultsContainer.classList.remove('opacity-0', 'translate-y-4');
+        }
+
+        function toggleControls(enabled) {
+            measureBtn.disabled = !enabled;
+            decBtn.disabled = !enabled;
+            incBtn.disabled = !enabled;
+        }
+
+        function resetUI(success = false) {
+            toggleControls(true);
+            updateTargetUI();
+            measureBtn.classList.remove('pulse');
+            statusContainer.classList.add('hidden');
+            progressBar.style.width = '0%';
+        }
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.classList.remove('hidden');
+            setTimeout(() => errorMsg.classList.add('hidden'), 5000);
+        }
+
+        measureBtn.addEventListener('click', startMeasurement);
+
+    </script>
+</body>
+</html>
