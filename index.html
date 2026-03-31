@@ -108,20 +108,20 @@
     <!-- Középső rész: Gomb és Beállítások -->
     <div class="flex flex-col items-center w-full max-w-md shrink-0">
         
-        <!-- mb-6 helyett mb-3 a szorosabb térközért -->
-        <div class="flex w-full items-stretch justify-between gap-3 mb-3">
+        <div class="flex w-full items-center justify-between gap-3 mb-3">
             <!-- Mérések száma beállító (Bal oldal) -->
-            <div class="flex items-stretch justify-start gap-2 w-1/2">
-                <button id="dec-btn" class="step-btn shrink-0 aspect-square">
+            <!-- Fix w-14 h-14 méretezés a tökéletes négyzet alakért WebKitben is -->
+            <div class="flex items-center justify-start gap-2 w-1/2">
+                <button id="dec-btn" class="step-btn shrink-0 w-14 h-14 sm:w-16 sm:h-16">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 </button>
-                <button id="inc-btn" class="step-btn shrink-0 aspect-square">
+                <button id="inc-btn" class="step-btn shrink-0 w-14 h-14 sm:w-16 sm:h-16">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 </button>
             </div>
 
-            <!-- Mérés gomb (Jobb oldal) -->
-            <button id="measure-btn" class="measure-btn w-1/2 py-4 sm:py-5 bg-black text-white rounded-2xl text-lg sm:text-xl font-black tracking-widest ml-auto">
+            <!-- Mérés gomb (Jobb oldal) - Fix h-14 magasság, hogy passzoljon -->
+            <button id="measure-btn" class="measure-btn w-1/2 h-14 sm:h-16 bg-black text-white rounded-2xl text-lg sm:text-xl font-black tracking-widest ml-auto">
                 MÉRÉS (5)
             </button>
         </div>
@@ -138,8 +138,8 @@
         </div>
     </div>
 
-    <!-- Alsó rész: Eredmények és Táblázat -->
-    <div id="results-container" class="w-full max-w-3xl flex-1 flex flex-col gap-4 overflow-hidden opacity-0 translate-y-4 transition-all duration-700">
+    <!-- Alsó rész: Eredmények és Táblázat (opacity-0 és translate-y-4 eltávolítva) -->
+    <div id="results-container" class="w-full max-w-3xl flex-1 flex flex-col gap-4 overflow-hidden transition-all duration-700">
         
         <!-- Átlagolt panel -->
         <div class="glass-panel rounded-2xl p-5 shrink-0 flex flex-col gap-3">
@@ -157,9 +157,9 @@
                 </div>
             </div>
 
-            <!-- GPX Export részleg -->
+            <!-- GPX Export részleg (Világosabb, vastagabb keret a text inputon) -->
             <div class="flex flex-col gap-2 pt-3 border-t border-white/10">
-                <input type="text" id="gpx-filename" placeholder="Fájlnév (opcionális)..." class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-slate-500">
+                <input type="text" id="gpx-filename" placeholder="Fájlnév (opcionális)..." class="w-full bg-slate-900/50 border-2 border-slate-400 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-400 transition-colors placeholder-slate-400">
                 <div class="flex justify-end gap-3">
                     <a id="osm-link" href="#" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg text-sm tracking-widest transition-colors flex items-center justify-center">
                         OSM
@@ -310,13 +310,12 @@
         async function startMeasurement() {
             measurements = [];
             currentAverages = null;
-            // A tableBody.innerHTML = ''; sort kivettük, hogy megmaradjanak a korábbi mérések a naplóban
+            
             toggleControls(false);
             measureBtn.textContent = "MÉRÉS...";
             measureBtn.classList.add('pulse');
             
             statusContainer.classList.remove('hidden');
-            resultsContainer.classList.add('opacity-0', 'translate-y-4');
             errorMsg.classList.add('hidden');
 
             for (let i = 0; i < targetCount; i++) {
@@ -334,7 +333,6 @@
                     };
                     
                     measurements.push(data);
-                    // Az addTableRow hívást kivettük innen, mert nem akarjuk a részeredményeket listázni
                     
                     const percent = ((i + 1) / targetCount) * 100;
                     progressBar.style.width = `${percent}%`;
@@ -419,8 +417,6 @@
             // OsmAnd link frissítése az átlagolt értékkel (Universal Link)
             const osmUrl = `https://osmand.net/go?lat=${avgLat}&lon=${avgLng}&z=18`;
             document.getElementById('osm-link').href = osmUrl;
-
-            resultsContainer.classList.remove('opacity-0', 'translate-y-4');
         }
 
         // --- GPX EXPORT FUNKCIÓ ---
