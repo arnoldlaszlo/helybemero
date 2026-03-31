@@ -108,7 +108,8 @@
     <!-- Középső rész: Gomb és Beállítások -->
     <div class="flex flex-col items-center w-full max-w-md shrink-0">
         
-        <div class="flex w-full items-stretch justify-between gap-3 mb-6">
+        <!-- mb-6 helyett mb-3 a szorosabb térközért -->
+        <div class="flex w-full items-stretch justify-between gap-3 mb-3">
             <!-- Mérések száma beállító (Bal oldal) -->
             <div class="flex items-stretch justify-start gap-2 w-1/2">
                 <button id="dec-btn" class="step-btn shrink-0 aspect-square">
@@ -126,7 +127,7 @@
         </div>
         
         <!-- Folyamatjelző -->
-        <div id="status-container" class="hidden w-full mb-6">
+        <div id="status-container" class="hidden w-full mb-2">
             <div class="flex justify-between text-[10px] text-blue-300 mb-1 px-1">
                 <span>MÉRÉS FOLYAMATBAN...</span>
                 <span id="progress-text">0 / 5</span>
@@ -141,17 +142,34 @@
     <div id="results-container" class="w-full max-w-3xl flex-1 flex flex-col gap-4 overflow-hidden opacity-0 translate-y-4 transition-all duration-700">
         
         <!-- Átlagolt panel -->
-        <div class="glass-panel rounded-2xl p-6 shrink-0 flex justify-between items-center">
-            <!-- Bal oldal: Koordináták egymás alatt (Kattintható Apple Maps link) -->
-            <a id="maps-link" href="#" target="_blank" class="flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group" title="Megnyitás Apple Maps-ben">
-                <div id="res-lat" class="mono text-xl sm:text-2xl font-bold text-white tracking-wider underline decoration-white/20 underline-offset-4 group-active:text-blue-400">-</div>
-                <div id="res-lng" class="mono text-xl sm:text-2xl font-bold text-white tracking-wider underline decoration-white/20 underline-offset-4 group-active:text-blue-400">-</div>
-            </a>
-            <!-- Jobb oldal: Magasság és pontosság egymás alatt -->
-            <div class="flex flex-col gap-2 text-right">
-                <div id="res-alt" class="mono text-xl sm:text-2xl font-bold text-emerald-400 tracking-wider">-</div>
-                <div id="res-acc" class="mono text-xl sm:text-2xl font-bold text-orange-400 tracking-wider">-</div>
+        <div class="glass-panel rounded-2xl p-5 shrink-0 flex flex-col gap-3">
+            
+            <div class="flex justify-between items-center">
+                <!-- Bal oldal: Koordináták egymás alatt -->
+                <a id="maps-link" href="#" target="_blank" class="flex flex-col gap-1 cursor-pointer active:scale-95 transition-transform group" title="Megnyitás Apple Maps-ben">
+                    <div id="res-lat" class="mono text-lg sm:text-xl font-bold text-white tracking-wider underline decoration-white/20 underline-offset-4 group-active:text-blue-400 leading-tight">-</div>
+                    <div id="res-lng" class="mono text-lg sm:text-xl font-bold text-white tracking-wider underline decoration-white/20 underline-offset-4 group-active:text-blue-400 leading-tight">-</div>
+                </a>
+                <!-- Jobb oldal: Magasság és pontosság egymás alatt -->
+                <div class="flex flex-col gap-1 text-right">
+                    <div id="res-alt" class="mono text-lg sm:text-xl font-bold text-emerald-400 tracking-wider leading-tight">-</div>
+                    <div id="res-acc" class="mono text-lg sm:text-xl font-bold text-orange-400 tracking-wider leading-tight">-</div>
+                </div>
             </div>
+
+            <!-- GPX Export részleg -->
+            <div class="flex flex-col gap-2 pt-3 border-t border-white/10">
+                <input type="text" id="gpx-filename" placeholder="Fájlnév (opcionális)..." class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-slate-500">
+                <div class="flex justify-end gap-3">
+                    <a id="osm-link" href="#" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg text-sm tracking-widest transition-colors flex items-center justify-center">
+                        OSM
+                    </a>
+                    <button id="export-gpx-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg text-sm tracking-widest transition-colors">
+                        GPX
+                    </button>
+                </div>
+            </div>
+
         </div>
 
         <!-- Részletes táblázat -->
@@ -210,7 +228,7 @@
                 const swUrl = URL.createObjectURL(blob);
                 
                 navigator.serviceWorker.register(swUrl).catch(() => {
-                    // Fallback, ha a generált Blob biztonsági okokból blokkolásra kerül (pl. szigorú szerveren)
+                    // Fallback
                     navigator.serviceWorker.register('./sw.js').catch(() => {});
                 });
             });
@@ -252,6 +270,9 @@
 
         // Állapot és Vezérlők
         let targetCount = 5;
+        let currentAverages = null; // Ide mentjük a generáláshoz
+        let sessionCount = 0; // Hányadik átlagolt mérésnél tartunk
+        
         const measureBtn = document.getElementById('measure-btn');
         const decBtn = document.getElementById('dec-btn');
         const incBtn = document.getElementById('inc-btn');
@@ -262,6 +283,8 @@
         const progressText = document.getElementById('progress-text');
         const errorMsg = document.getElementById('error-message');
         const tableBody = document.getElementById('measurement-table-body');
+        const exportGpxBtn = document.getElementById('export-gpx-btn');
+        const gpxFilenameInput = document.getElementById('gpx-filename');
 
         function updateTargetUI() {
             measureBtn.textContent = `MÉRÉS (${targetCount})`;
@@ -286,7 +309,8 @@
 
         async function startMeasurement() {
             measurements = [];
-            tableBody.innerHTML = '';
+            currentAverages = null;
+            // A tableBody.innerHTML = ''; sort kivettük, hogy megmaradjanak a korábbi mérések a naplóban
             toggleControls(false);
             measureBtn.textContent = "MÉRÉS...";
             measureBtn.classList.add('pulse');
@@ -310,7 +334,7 @@
                     };
                     
                     measurements.push(data);
-                    addTableRow(i + 1, data);
+                    // Az addTableRow hívást kivettük innen, mert nem akarjuk a részeredményeket listázni
                     
                     const percent = ((i + 1) / targetCount) * 100;
                     progressBar.style.width = `${percent}%`;
@@ -351,7 +375,8 @@
                 <td class="p-3 text-emerald-400">${data.alt ? data.alt.toFixed(1) + 'm' : 'N/A'}</td>
                 <td class="p-3 text-orange-400">±${data.acc.toFixed(1)}m</td>
             `;
-            tableBody.appendChild(row);
+            // appendChild helyett prepend, hogy a legújabb mérés kerüljön felülre
+            tableBody.prepend(row);
         }
 
         function displayAverages() {
@@ -361,6 +386,27 @@
             const avgAlt = measurements.reduce((s, m) => s + m.alt, 0) / count;
             const avgAcc = measurements.reduce((s, m) => s + m.acc, 0) / count;
 
+            // Elmentjük az aktuális átlagot globálisan a GPX generáláshoz
+            currentAverages = {
+                lat: avgLat,
+                lng: avgLng,
+                alt: avgAlt,
+                acc: avgAcc
+            };
+
+            // Hozzáadjuk a táblázathoz az átlagolt eredményt
+            sessionCount++;
+            const now = new Date();
+            const timestamp = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            addTableRow(sessionCount, {
+                time: timestamp,
+                lat: avgLat,
+                lng: avgLng,
+                alt: avgAlt,
+                acc: avgAcc
+            });
+
             document.getElementById('res-lat').textContent = avgLat.toFixed(6) + '°';
             document.getElementById('res-lng').textContent = avgLng.toFixed(6) + '°';
             document.getElementById('res-alt').textContent = avgAlt ? avgAlt.toFixed(1) + ' m' : 'N/A';
@@ -369,9 +415,55 @@
             // Apple Maps link frissítése az átlagolt értékkel
             const mapsUrl = `https://maps.apple.com/?q=${avgLat},${avgLng}&ll=${avgLat},${avgLng}`;
             document.getElementById('maps-link').href = mapsUrl;
+            
+            // OsmAnd link frissítése az átlagolt értékkel (Universal Link)
+            const osmUrl = `https://osmand.net/go?lat=${avgLat}&lon=${avgLng}&z=18`;
+            document.getElementById('osm-link').href = osmUrl;
 
             resultsContainer.classList.remove('opacity-0', 'translate-y-4');
         }
+
+        // --- GPX EXPORT FUNKCIÓ ---
+        function exportToGPX() {
+            if (!currentAverages) return;
+
+            const now = new Date();
+            // Formátum: ÉÉÉÉHHNN_ÓÓPP
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const dateStr = `${yyyy}${mm}${dd}_${hh}${min}`;
+            
+            const gpxTime = now.toISOString();
+            const inputName = gpxFilenameInput.value.trim();
+            const filename = (inputName ? `${inputName}_${dateStr}` : `gps-meres_${dateStr}`) + '.gpx';
+            const wptName = inputName || `Mérés ${dateStr}`;
+
+            const gpxData = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Helyzetmero App">
+  <wpt lat="${currentAverages.lat.toFixed(6)}" lon="${currentAverages.lng.toFixed(6)}">
+    <ele>${currentAverages.alt ? currentAverages.alt.toFixed(1) : 0}</ele>
+    <time>${gpxTime}</time>
+    <name>${wptName}</name>
+    <desc>Pontosság: ±${currentAverages.acc.toFixed(1)}m</desc>
+  </wpt>
+</gpx>`;
+
+            const blob = new Blob([gpxData], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        exportGpxBtn.addEventListener('click', exportToGPX);
 
         function toggleControls(enabled) {
             measureBtn.disabled = !enabled;
