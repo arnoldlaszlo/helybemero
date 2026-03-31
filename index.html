@@ -60,8 +60,6 @@
         }
 
         .step-btn {
-            width: 48px;
-            height: 48px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -110,22 +108,20 @@
     <!-- Középső rész: Gomb és Beállítások -->
     <div class="flex flex-col items-center w-full max-w-md shrink-0">
         
-        <!-- Mérés gomb -->
-        <button id="measure-btn" class="measure-btn w-full py-10 bg-black text-white rounded-2xl text-2xl font-black tracking-[0.2em] mb-4">
-            MÉRÉS (5)
-        </button>
-
-        <!-- Mérések száma beállító -->
-        <div class="flex items-center gap-6 mb-6">
-            <button id="dec-btn" class="step-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </button>
-            <div class="text-center">
-                <div class="text-[10px] text-slate-400 uppercase tracking-widest">Mérések száma</div>
-                <div id="count-display" class="mono text-xl font-bold text-white">5</div>
+        <div class="flex w-full items-stretch justify-between gap-3 mb-6">
+            <!-- Mérések száma beállító (Bal oldal) -->
+            <div class="flex items-stretch justify-start gap-2 w-1/2">
+                <button id="dec-btn" class="step-btn shrink-0 aspect-square">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+                <button id="inc-btn" class="step-btn shrink-0 aspect-square">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
             </div>
-            <button id="inc-btn" class="step-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+
+            <!-- Mérés gomb (Jobb oldal) -->
+            <button id="measure-btn" class="measure-btn w-1/2 py-4 sm:py-5 bg-black text-white rounded-2xl text-lg sm:text-xl font-black tracking-widest ml-auto">
+                MÉRÉS (5)
             </button>
         </div>
         
@@ -145,25 +141,16 @@
     <div id="results-container" class="w-full max-w-3xl flex-1 flex flex-col gap-4 overflow-hidden opacity-0 translate-y-4 transition-all duration-700">
         
         <!-- Átlagolt panel -->
-        <div class="glass-panel rounded-2xl p-4 shrink-0">
-            <h2 class="text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-3 border-b border-white/10 pb-1">Átlagolt eredmények</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                    <div class="text-[10px] text-slate-500 uppercase">Szélesség</div>
-                    <div id="res-lat" class="mono text-sm font-semibold text-white">-</div>
-                </div>
-                <div>
-                    <div class="text-[10px] text-slate-500 uppercase">Hosszúság</div>
-                    <div id="res-lng" class="mono text-sm font-semibold text-white">-</div>
-                </div>
-                <div>
-                    <div class="text-[10px] text-slate-500 uppercase">Magasság</div>
-                    <div id="res-alt" class="mono text-sm font-semibold text-emerald-400">-</div>
-                </div>
-                <div>
-                    <div class="text-[10px] text-slate-500 uppercase">Pontosság</div>
-                    <div id="res-acc" class="mono text-sm font-semibold text-orange-400">-</div>
-                </div>
+        <div class="glass-panel rounded-2xl p-6 shrink-0 flex justify-between items-center">
+            <!-- Bal oldal: Koordináták egymás alatt (Kattintható Apple Maps link) -->
+            <a id="maps-link" href="#" target="_blank" class="flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group" title="Megnyitás Apple Maps-ben">
+                <div id="res-lat" class="mono text-xl sm:text-2xl font-bold text-white tracking-wider underline decoration-white/20 underline-offset-4 group-active:text-blue-400">-</div>
+                <div id="res-lng" class="mono text-xl sm:text-2xl font-bold text-white tracking-wider underline decoration-white/20 underline-offset-4 group-active:text-blue-400">-</div>
+            </a>
+            <!-- Jobb oldal: Magasság és pontosság egymás alatt -->
+            <div class="flex flex-col gap-2 text-right">
+                <div id="res-alt" class="mono text-xl sm:text-2xl font-bold text-emerald-400 tracking-wider">-</div>
+                <div id="res-acc" class="mono text-xl sm:text-2xl font-bold text-orange-400 tracking-wider">-</div>
             </div>
         </div>
 
@@ -266,7 +253,6 @@
         // Állapot és Vezérlők
         let targetCount = 5;
         const measureBtn = document.getElementById('measure-btn');
-        const countDisplay = document.getElementById('count-display');
         const decBtn = document.getElementById('dec-btn');
         const incBtn = document.getElementById('inc-btn');
         
@@ -278,7 +264,6 @@
         const tableBody = document.getElementById('measurement-table-body');
 
         function updateTargetUI() {
-            countDisplay.textContent = targetCount;
             measureBtn.textContent = `MÉRÉS (${targetCount})`;
         }
 
@@ -354,10 +339,15 @@
 
         function addTableRow(index, data) {
             const row = document.createElement('tr');
+            const mapsUrl = `https://maps.apple.com/?q=${data.lat},${data.lng}&ll=${data.lat},${data.lng}`;
             row.innerHTML = `
                 <td class="p-3 text-blue-400 font-bold text-center">${data.time}</td>
                 <td class="p-3 text-slate-500">${index}</td>
-                <td class="p-3 text-white">${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}</td>
+                <td class="p-3">
+                    <a href="${mapsUrl}" target="_blank" class="text-white hover:text-blue-400 active:text-blue-400 underline decoration-white/30 underline-offset-4">
+                        ${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}
+                    </a>
+                </td>
                 <td class="p-3 text-emerald-400">${data.alt ? data.alt.toFixed(1) + 'm' : 'N/A'}</td>
                 <td class="p-3 text-orange-400">±${data.acc.toFixed(1)}m</td>
             `;
@@ -375,6 +365,10 @@
             document.getElementById('res-lng').textContent = avgLng.toFixed(6) + '°';
             document.getElementById('res-alt').textContent = avgAlt ? avgAlt.toFixed(1) + ' m' : 'N/A';
             document.getElementById('res-acc').textContent = '±' + avgAcc.toFixed(1) + ' m';
+
+            // Apple Maps link frissítése az átlagolt értékkel
+            const mapsUrl = `https://maps.apple.com/?q=${avgLat},${avgLng}&ll=${avgLat},${avgLng}`;
+            document.getElementById('maps-link').href = mapsUrl;
 
             resultsContainer.classList.remove('opacity-0', 'translate-y-4');
         }
