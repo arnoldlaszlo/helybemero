@@ -3,174 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenTopoMap Koordináta Kereső</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Tailwind CSS -->
+    <title>Napsütés iránya - OpenTopoMap</title>
+    
+    <!-- Tailwind CSS a gyors formázáshoz -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS és JS a térképhez -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- SunCalc a napállás kiszámításához -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-            font-family: sans-serif;
-        }
-        #map {
-            height: 100vh;
-            width: 100%;
-            z-index: 0;
-        }
-        .ui-overlay {
+        /* Térkép kitölti a teljes képernyőt */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+        #map { width: 100vw; height: 100vh; }
+
+        /* Célkereszt pontosan a képernyő közepén */
+        #crosshair {
             position: absolute;
-            top: 20px;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            pointer-events: none; /* Ne akadályozza a térkép mozgatását */
+        }
+
+        /* Napsütés irányát jelző vonal és nyíl */
+        #sun-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 250px;
+            background: #000000;
+            transform-origin: bottom center; /* A forgatás középpontja a képernyő közepe */
+            margin-left: -1px;
+            margin-top: -250px; /* Hogy a bottom legyen középen */
+            z-index: 1000;
+            pointer-events: none;
+            transition: transform 0.1s linear;
+        }
+
+        /* Nyíl hegye ami a célkeresztre mutat */
+        #sun-arrowhead {
+            position: absolute;
+            bottom: -1px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            display: flex;
-            gap: 15px;
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(0,0,0,0.1);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 16px solid #000000; /* Lefelé (a célkereszt felé) mutató háromszög */
+            transition: border-color 0.3s;
         }
-        .coord-input {
-            width: 140px;
-            padding: 10px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-weight: 600;
-            font-family: 'Courier New', Courier, monospace;
-            outline: none;
-            transition: all 0.2s;
-            font-size: 1.1rem;
+
+        /* Ikon a vonal végén (Nap/Hold) */
+        #sun-icon-container {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 28px;
+            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.4));
         }
-        .coord-input:focus {
-            border-color: #ef4444;
-            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+
+        /* Éjszakai mód színei */
+        .night-line {
+            background: linear-gradient(to bottom, #9ca3af 0%, #4b5563 100%) !important;
+            opacity: 0.8;
         }
-        .label {
-            font-size: 11px;
-            color: #475569;
-            margin-bottom: 4px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .btn-center {
-            align-self: flex-end;
-            background: #ef4444;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .btn-center:hover {
-            background: #dc2626;
+        .night-arrow {
+            border-top-color: #4b5563 !important;
         }
     </style>
 </head>
-<body>
+<body class="font-sans">
 
-    <div class="ui-overlay">
-        <div>
-            <div class="label">Szélesség (Lat)</div>
-            <input type="number" id="lat-input" class="coord-input" step="0.0001" value="47.4979">
-        </div>
-        <div>
-            <div class="label">Hosszúság (Lon)</div>
-            <input type="number" id="lng-input" class="coord-input" step="0.0001" value="19.0402">
-        </div>
-        <button class="btn-center" onclick="jumpToCoords()" title="Ugrás a koordinátákhoz">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+    <!-- Felső UI Panel -->
+    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-white/95 backdrop-blur-md shadow-2xl rounded-2xl p-4 flex flex-col items-center gap-3 border border-gray-200 min-w-[320px]">
+        
+        <!-- Aktuális Dátum/Idő (Kattintható) -->
+        <button id="current-time-btn" class="text-sm text-blue-600 font-bold hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded-full transition-all flex items-center gap-2 group" title="Kattints ide a mostani időpont visszaállításához!">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="group-hover:rotate-180 transition-transform duration-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="current-time-display">Betöltés...</span>
         </button>
+
+        <!-- Dátum és Idő választó -->
+        <div class="flex items-center justify-center gap-2 w-full">
+            <input type="date" id="date-input" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 cursor-pointer hover:bg-gray-100 transition-colors">
+            <input type="time" id="time-input" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 cursor-pointer hover:bg-gray-100 transition-colors">
+        </div>
+
+        <!-- Státusz üzenet -->
+        <div id="sun-status" class="text-xs font-bold h-4 text-center w-full uppercase tracking-wider text-orange-600">
+            Napsütés iránya
+        </div>
     </div>
 
+    <!-- Leaflet Térkép -->
     <div id="map"></div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Nap/Hold irány mutatója -->
+    <div id="sun-indicator">
+        <div id="sun-arrowhead"></div>
+        <div id="sun-icon-container">☀️</div>
+    </div>
+
+    <!-- Középső Célkereszt -->
+    <div id="crosshair">
+        <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-[0_0_2px_rgba(255,255,255,1)]">
+            <circle cx="50" cy="50" r="15" fill="none" stroke="#ef4444" stroke-width="4"/>
+            <circle cx="50" cy="50" r="2" fill="#ef4444" />
+            <line x1="50" y1="10" x2="50" y2="30" stroke="#ef4444" stroke-width="4" stroke-linecap="round"/>
+            <line x1="50" y1="70" x2="50" y2="90" stroke="#ef4444" stroke-width="4" stroke-linecap="round"/>
+            <line x1="10" y1="50" x2="30" y2="50" stroke="#ef4444" stroke-width="4" stroke-linecap="round"/>
+            <line x1="70" y1="50" x2="90" y2="50" stroke="#ef4444" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+    </div>
+
     <script>
-        // Térkép inicializálása
-        const map = L.map('map', {
-            worldCopyJump: true,
-            zoomControl: false // Egyéni pozicionáláshoz később
-        }).setView([47.4979, 19.0402], 13);
+        // 1. Térkép inicializálása (Alapértelmezett központ: Budapest)
+        const map = L.map('map', {zoomControl: false}).setView([47.4979, 19.0402], 14);
+        L.control.zoom({position: 'bottomright'}).addTo(map);
 
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-        // OpenTopoMap réteg
+        // Alaptérkép: OpenTopoMap
         L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            maxZoom: 17,
-            attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>'
+            attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+            maxZoom: 17
         }).addTo(map);
 
-        let horizontalLine, verticalLine;
-        const latInput = document.getElementById('lat-input');
-        const lngInput = document.getElementById('lng-input');
+        // 2. UI Elemek
+        const dateInput = document.getElementById('date-input');
+        const timeInput = document.getElementById('time-input');
+        const currentDisplay = document.getElementById('current-time-display');
+        const currentBtn = document.getElementById('current-time-btn');
+        
+        const sunIndicator = document.getElementById('sun-indicator');
+        const sunArrowhead = document.getElementById('sun-arrowhead');
+        const sunIconContainer = document.getElementById('sun-icon-container');
+        const sunStatus = document.getElementById('sun-status');
 
-        // Szálkereszt frissítése (folytonos vonalak)
-        function updateCrosshair(lat, lng) {
-            if (horizontalLine) map.removeLayer(horizontalLine);
-            if (verticalLine) map.removeLayer(verticalLine);
+        // 3. Valós idejű óra frissítése a felső sávban
+        function updateRealTimeClock() {
+            const now = new Date();
+            const options = { 
+                year: 'numeric', month: 'short', day: 'numeric', 
+                hour: '2-digit', minute: '2-digit', second: '2-digit' 
+            };
+            currentDisplay.innerText = now.toLocaleDateString('hu-HU', options) + ' (MOST)';
+        }
+        setInterval(updateRealTimeClock, 1000);
+        updateRealTimeClock();
 
-            // Folytonos vízszintes vonal (szélességi kör)
-            horizontalLine = L.polyline([[lat, -180], [lat, 180]], {
-                color: '#ef4444',
-                weight: 2,
-                opacity: 0.8,
-                interactive: false
-            }).addTo(map);
+        // 4. Inputok beállítása adott dátumra/időre
+        function setInputsToDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-${month}-${day}`;
 
-            // Folytonos függőleges vonal (hosszúsági kör)
-            verticalLine = L.polyline([[-90, lng], [90, lng]], {
-                color: '#ef4444',
-                weight: 2,
-                opacity: 0.8,
-                interactive: false
-            }).addTo(map);
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            timeInput.value = `${hours}:${minutes}`;
         }
 
-        // Térkép mozgatása az inputok alapján
-        function jumpToCoords() {
-            const lat = parseFloat(latInput.value);
-            const lng = parseFloat(lngInput.value);
-            if (!isNaN(lat) && !isNaN(lng)) {
-                map.panTo([lat, lng]);
-                updateCrosshair(lat, lng);
+        // 5. Kiválasztott időpont lekérése az inputokból
+        function getSelectedDate() {
+            const dVal = dateInput.value;
+            const tVal = timeInput.value;
+            if (!dVal || !tVal) return new Date();
+            return new Date(`${dVal}T${tVal}`);
+        }
+
+        // 6. Fő funkció: Nap irányának számítása és a grafika forgatása
+        function updateSunDirection() {
+            const center = map.getCenter();
+            const date = getSelectedDate();
+            
+            // SunCalc használata a koordináták alapján
+            const sunPos = SunCalc.getPosition(date, center.lat, center.lng);
+            
+            // SunCalc irányszög (azimuth): 0 = Dél, Math.PI/2 = Nyugat
+            // Átváltás standard iránytű fokokra (Észak = 0, Kelet = 90, Dél = 180, Nyugat = 270)
+            const azimuthDeg = sunPos.azimuth * 180 / Math.PI;
+            const compassBearing = (180 + azimuthDeg) % 360;
+
+            // Vonal forgatása a fény forrásának irányába
+            sunIndicator.style.transform = `rotate(${compassBearing}deg)`;
+            
+            // Ikon visszaforgatása, hogy mindig egyenesen álljon (ne fejjel lefelé)
+            sunIconContainer.style.transform = `translateX(-50%) rotate(-${compassBearing}deg)`;
+
+            // Éjszaka / Nappal megkülönböztetése (altitude < 0 -> a nap a horizont alatt van)
+            if (sunPos.altitude < 0) {
+                sunIndicator.classList.add('night-line');
+                sunArrowhead.classList.add('night-arrow');
+                sunIconContainer.innerText = '🌙';
+                sunStatus.innerText = 'Éjszaka (Nap a horizont alatt)';
+                sunStatus.className = 'text-xs font-bold h-4 text-center w-full uppercase tracking-wider text-gray-600';
+            } else {
+                sunIndicator.classList.remove('night-line');
+                sunArrowhead.classList.remove('night-arrow');
+                sunIconContainer.innerText = '☀️';
+                sunStatus.innerText = 'Napsütés iránya';
+                sunStatus.className = 'text-xs font-bold h-4 text-center w-full uppercase tracking-wider text-orange-600';
             }
         }
 
-        // Input változás kezelése (nyílgombokhoz is)
-        function handleInputChange() {
-            const lat = parseFloat(latInput.value);
-            const lng = parseFloat(lngInput.value);
-            if (!isNaN(lat) && !isNaN(lng)) {
-                // Nem pan-olunk automatikusan, csak ha a user kéri vagy kattint, 
-                // hogy ne rángassa a térképet gépelés közben, de a vonal frissüljön.
-                updateCrosshair(lat, lng);
-            }
-        }
+        // 7. Eseménykezelők bekötése
+        // Térkép mozgatása közben azonnal frissül a szög
+        map.on('move', updateSunDirection);
+        
+        // Inputok megváltoztatásakor frissül
+        dateInput.addEventListener('change', updateSunDirection);
+        timeInput.addEventListener('change', updateSunDirection);
 
-        latInput.addEventListener('input', handleInputChange);
-        lngInput.addEventListener('input', handleInputChange);
-
-        // Kattintás a térképen: frissíti az inputot ÉS a szálkeresztet
-        map.on('click', (e) => {
-            const lat = e.latlng.lat.toFixed(6);
-            const lng = e.latlng.lng.toFixed(6);
-            latInput.value = lat;
-            lngInput.value = lng;
-            updateCrosshair(lat, lng);
+        // A "Mostani" dátumra kattintás
+        currentBtn.addEventListener('click', () => {
+            setInputsToDate(new Date());
+            updateSunDirection();
         });
 
-        // Kezdőállapot
-        updateCrosshair(47.4979, 19.0402);
-
+        // 8. Kezdeti állapot beállítása betöltéskor
+        setInputsToDate(new Date());
+        updateSunDirection();
     </script>
 </body>
 </html>
